@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Title</title>
+	<style>
+		*{padding:0;margin:0;}
+		a{color:#555;}
+		#canvas{border:1px solid #dadbdb;margin:0 auto;display:block;background:url('image/back_start.png') no-repeat 0 0;}
+		#btn_start{position:absolute;left:50%;top:500px;margin-left:-60px;display:inline-block;width:120px;height:30px;line-height:30px;border:1px solid #333;border-radius:15px;text-align:center;color:555;text-decoration:none;}
+		.gameover{display:none;position:absolute;left:50%;top:210px;width:260px;margin-left:-130px;padding-top:40px;border:1px solid #333;border-radius:20px;background:url('image/back_start.png') no-repeat 0 0;}
+		.gameover .tips{font-size:24px;text-align:center;color:#333;}
+		.gameover .score{margin-top:15px;text-align:center;}
+		.gameover #score_num{font-weight:bold;}
+		.gameover .btn_restart{display:inline-block;width:120px;height:30px;line-height:30px;margin:15px auto;border:1px solid #333;border-radius:15px;text-align:center;color:555;text-decoration:none;}
+	</style>
+</head>
+<body>
+	<canvas id="canvas" width="320" height="568">你的浏览器不支持canvas</canvas>
+	<a href="#" id="btn_start">开始游戏</a>
+	<div class="gameover" id="gameover">
+		<div class="tips">GAME OVER</div>
+		<div class="score">
+			您的得分：<span id="score_num">0</span>
+		</div>
+		<div style="text-align:center">
+			<a href="javascript:;" class="btn_restart" id="restart">重新开始</a>
+		</div>
+	</div>
+	
+	<script type="text/javascript">
+	/*
+		author:oceanking
+		date:2014/04/15
+	
+	*/
+	
+		window.animateFrame = window.requestAnimationFrame
+							|| window.mozRequestAnimationFrame
+							|| window.webkitRequestAnimationFrame
+							|| window.msRequestAnimationFrame
+							|| window.oRequestAnimationFrame
+							|| function(callback) {
+							setTimeout(callback, 1000 / 60);
+							};
+		window.cancelAnimateFrame = window.cancelAnimationFrame ||
+                window.webkitCancelAnimationFrame ||
+                window.mozCancelAnimationFrame ||
+                window.oCancelAnimationFrame ||
+                function (id) {
+                    window.clearTimeout(id);
+                }
+		var canvas = $_('canvas');
+		var ctx = canvas.getContext('2d');
+		var canvas_wh = {width:canvas.width,height:canvas.height};
+		var canvasPos = getPagePosition(canvas);
+		var readyImg = null;
+		var scoreShow = 0;
+		var scoreElem;
+		var playState;
+		var endState = true;
+		var selfPlane;
+		var bulletCount = 5;
+		var bulletArr = [];
+		var imgs = {
+			'backstart':'image/back_start.png',
+			'backmain':'image/background_1.png',
+			'bullet':'image/bullet1.png',
+			'self':'image/plane_self.gif',
+			'plane_big':'image/plane_big.png',
+			'plane_medium':'image/plane_medium.png',
+			'plane_small':'image/plane_small.png',
+			'plane_big_boom':'image/plane_big_boom.gif',
+			'plane_medium_boom':'image/plane_medium_boom.gif',
+			'plane_small_boom':'image/plane_small_boom.gif',
+			'plane_big_shooted':'image/plane_big_shooted.png',
+			'plane_medium_shooted':'image/plane_medium_shooted.png',
+			'plane_self_boom':'image/plane_self_boom.gif'
+		}
+		var elements = [];
+		
+		window.onload = function(){
+			imgPreload(imgs,function(images){
+				//elements.push(new getImage(0,0,images.backstart,ctx));
+				readyImg = images;
+				$_('btn_start').onclick = null;
+				$_('btn_start').onclick = function(){
+					endState = false;
+					this.style.display='none';
+					play(images);
+					//alert(images.self.width);
+				}
+			});
+			
+			$_('restart').onclick = function(){
+				if(readyImg!=null){
+					$_('gameover').style.display='none';
+					endState = false;
+					play(readyImg);
+				}	
+			}
+			
+			//var tmp = new
+		}
+		
+		function play(images){
+			elements = [];
+			elements.push(new getImage(0,0,images.backmain,ctx));
+			selfPlane = new getSelfPlane(120,485,1,0,0,images.self,images.plane_self_boom,ctx);
+			scoreElem = new Score(ctx);
+			elements.push(selfPlane);
+			canvas.onmousemove = function(e){
+				selfPlane.x = e.pageX - canvasPos.x - (selfPlane.imgOrigin.width/2);
+				selfPlane.y = e.pageY - canvasPos.y - (selfPlane.imgOrigin.height/2);
+			}
+			
+			for(var i=0;i<bulletCount;i++){
+				elements.push(new getBullet(120 + selfPlane.imgOrigin.width/2,485,images.bullet,ctx,i));
+			}
+			
+			
+			for(var i=0;i<6;i++){
+				elements.push(new getEnemyPlane(getRnd(310),getRnd(-200,0),1,1000,getRnd(0.6,1)*getRnd(1,1.2),images.plane_small,images.plane_small_boom,ctx));
+			}
+			for(var i=0;i<2;i++){
+				elements.push(new getEnemyPlane(getRnd(290),getRnd(-250,0),5,5000,getRnd(0.3,0.6)*getRnd(1,1.1),images.plane_medium,images.plane_medium_boom,ctx));
+			}
+			
+			elements.push(new getEnemyPlane(getRnd(270),getRnd(-250,0),10,10000,getRnd(0.2,0.4)*getRnd(1,1.1),images.plane_big,images.plane_big_boom,ctx));
+			
+			elements.push(scoreElem);
+			render();
+		}
+
+
+		window.onresize = function(){
+			canvasPos = getPagePosition(canvas);	
+		}
+
+
+		function $_(id){
+			return document.getElementById(id);	
+		}
+		
+		var bi = 0;//子弹数组index
+		
+		function render(){
+			ctx.clearRect(0,0,320,568);
+			//var bi = 0;
+			for(var i=0;i<elements.length;i++){
+				
+				if(elements[i].type=='bullet'){
+					bulletArr[bi] = elements[i];
+					bulletArr[bi].index = i;
+					bi = (bi>=bulletCount-1)?0:bi+1;
+				}
+				
+				if(elements[i].draw){
+					elements[i].draw();
+					for(var j=0;j<bulletCount;j++){
+						if(elements[i].score&&elements[i].score!=0){
+							if(ctx.isPointInPath(bulletArr[j].x,bulletArr[j].y)&&bulletArr[j].y>=0){
+								elements[i].hp-=1;
+								elements[bulletArr[j].index].y = -20;//为了让子弹消失
+							}
+							if(elements[i].y>-1*elements[i].imgOrigin.height&&elements[i].y<568&&elements[i].hp>0){
+								if(Math.sqrt(Math.pow(selfPlane.x+selfPlane.imgOrigin.width/2-(elements[i].x+elements[i].imgOrigin.width/2),2)+Math.pow(selfPlane.y+selfPlane.imgOrigin.height/2 - (elements[i].y+elements[i].imgOrigin.height/2),2))<=(selfPlane.imgOrigin.width/2+elements[i].imgOrigin.width/2)){
+									elements[i].hp = 0;
+									selfPlane.hp -= 1;
+								}
+							}
+							
+							
+						}
+					}
+				}
+			}
+			//if(!playState){
+				if(endState){
+					cancelAnimateFrame(playState);
+					$_('gameover').style.display='block';
+					$_('score_num').innerHTML = scoreShow;
+				}else{
+					playState = animateFrame(render);
+				}
+				//console.log('*******');
+			//}
+			//render();
+			//console.log(playState);
+			
+		}
+		
+
+		function imgPreload(srcs,callback){
+				var count = 0,
+					images ={},
+					imgNum = 0;	
+				for(src in srcs){
+					imgNum++;
+				}
+				for(src in srcs){
+					images[src] = new Image();
+					images[src].onload = function(){
+						if(++count >= imgNum){
+							callback(images);
+						}
+					}
+					images[src].src = srcs[src];
+				}
+			}
+		function getImage(x,y,img,cx){
+				this.x = x;
+				this.y = y
+				this.img = img;
+				this.draw = function(){
+					cx.save();
+					cx.drawImage(this.img,this.x,this.y);
+					cx.restore();
+				}
+			}
+
+		function Plane(x,y,hp,score,speed,imgOrigin,imgBoom){
+			this.x = x;
+			this.y = y;
+			this.hp = hp;
+			this.score = score;
+			this.speed = speed;
+			this.imgOrigin = imgOrigin;
+			this.imgBoom = imgBoom;
+			}
+			
+		function getSelfPlane(x,y,hp,score,speed,imgOrigin,imgBoom,cx){
+			Plane.call(this,x,y,hp,score,speed,imgOrigin,imgBoom);
+			this.type = 'self';
+			this.draw = function(){
+				//cx.fillStyle='red';
+				cx.beginPath();
+				cx.arc(this.x+this.imgOrigin.width/2,this.y+this.imgOrigin.height/2,this.imgOrigin.width/2,0,Math.PI*2);
+				cx.closePath();
+				//cx.fill();
+				cx.save();
+				if(this.hp>0){
+					cx.drawImage(this.imgOrigin,this.x,this.y);
+				}else{
+					cx.drawImage(this.imgBoom,this.x,this.y);
+					endState = true;
+				}
+				
+				cx.restore();
+			}
+		}
+		var flag = 0;
+		
+		/*function getSmallEnemyPlane(x,y,hp,score,speed,imgOrigin,imgBoom,cx){
+			Plane.call(this,x,y,hp,score,speed,imgOrigin,imgBoom);
+			//this.count = 0;
+			this.liveTime = getRnd(300,480);
+			this.livecount = 0;
+			this.deadCount = 0;
+			this.draw = function(){
+				this.livecount++;
+				
+				if(this.hp!=0){
+					this.y += this.speed;
+				}
+				cx.beginPath();
+				//cx.fillStyle='green';
+				//cx.rect(this.x,this.y,this.imgOrigin.width,this.imgOrigin.height);
+				cx.arc(this.x+this.imgOrigin.width/2,this.y+this.imgOrigin.height/2,this.imgOrigin.width/2,0,Math.PI*2)
+				//cx.fill();
+				cx.closePath();
+				
+				//flag++;
+				
+				/*for(var j=0;j<bulletCount;j++){
+					if(cx.isPointInPath(bulletArr[j].x,bulletArr[j].y)){
+						this.hp = 0;
+					}
+				}*/
+				//cx.closePath();
+				
+				
+				/*cx.save();
+				if(this.y>canvas_wh.height+20){
+					this.x = getRnd(canvas_wh.width-20);
+					this.y = getRnd(-250,-25);
+					this.speed = getRnd(0.6,1)*getRnd(1,1.2);
+					this.hp = 1;
+				}
+				if(this.hp>0){
+					cx.drawImage(this.imgOrigin,this.x,this.y);
+				}else{
+					this.deadCount++;
+					cx.drawImage(this.imgBoom,this.x,this.y);
+					if(this.deadCount>=15){
+						this.deadCount = 0;
+						this.x = getRnd(canvas_wh.width-20);
+						this.y = getRnd(-100,-20);
+						this.speed = getRnd(0.6,1)*getRnd(1,1.2);
+						this.hp = 1;
+						scoreShow += this.score;
+					}
+					
+					
+				}
+				
+				cx.restore();
+			}
+		}*/
+		
+		function getEnemyPlane(x,y,hp,score,speed,imgOrigin,imgBoom,cx){
+				Plane.call(this,x,y,hp,score,speed,imgOrigin,imgBoom);
+				this.hp_o = hp;
+				//this.count = 0;
+				if(hp==1){
+					this.dataArr = [0.6,1,1,1.2,-250,-1*this.imgOrigin.height];	
+				}else if(hp==5){
+					this.dataArr = [0.3,0.5,1,1.1,-250,-1*this.imgOrigin.height];	
+				}else if(hp==10){
+					this.dataArr = [0.2,0.4,1,1.1,-250,-1*this.imgOrigin.height];	
+				}
+				this.liveTime = getRnd(300,480);
+				this.livecount = 0;
+				this.deadCount = 0;
+				this.draw = function(){
+					this.livecount++;
+					
+					if(this.hp!=0){
+						this.y += this.speed;
+					}
+					cx.beginPath();
+					//cx.fillStyle='green';
+					//cx.rect(this.x,this.y,this.imgOrigin.width,this.imgOrigin.height);
+					cx.arc(this.x+this.imgOrigin.width/2,this.y+this.imgOrigin.height/2,this.imgOrigin.width/2,0,Math.PI*2)
+					//cx.fill();
+					cx.closePath();
+					
+					cx.save();
+					if(this.y>canvas_wh.height+this.imgOrigin.width/2){
+						this.x = getRnd(canvas_wh.width-this.imgOrigin.width/2);
+						this.y = getRnd(this.dataArr[4],this.dataArr[5]);
+						this.speed = getRnd(this.dataArr[0],this.dataArr[1])*getRnd(this.dataArr[2],this.dataArr[3]);
+						this.hp = this.hp_o;
+					}
+					if(this.hp>0){
+						cx.drawImage(this.imgOrigin,this.x,this.y);
+					}else{
+						this.deadCount++;
+						cx.drawImage(this.imgBoom,this.x,this.y);
+						if(this.deadCount>=15){
+							this.deadCount = 0;
+							this.x = getRnd(canvas_wh.width-this.imgOrigin.width/2);
+							this.y = getRnd(this.dataArr[4],this.dataArr[5]);
+							this.speed = getRnd(this.dataArr[0],this.dataArr[1])*getRnd(this.dataArr[2],this.dataArr[3]);
+							this.hp = this.hp_o;
+							scoreShow += this.score;
+						}
+						
+						
+					}
+					
+					cx.restore();
+				}
+			}
+		
+		function getBullet(x,y,imgSrc,cx,sNum){
+			this.x = x;
+			this.y = y;
+			this.imgSrc = imgSrc;
+			this.liveTime = 300;
+			this.count = sNum*60;
+			this.type = 'bullet';
+			this.index = 0;
+			//this.enable = true;
+			this.draw = function(){
+						this.count += 6;
+						if(this.count>=this.liveTime){
+							this.y = selfPlane.y;
+							this.x = selfPlane.x + selfPlane.imgOrigin.width/2;
+							this.count = 0;
+						}
+						//if(this.enable){
+							cx.beginPath();
+							//cx.fillStyle='green'
+							cx.rect(this.posX,this.posY,10,10);
+							cx.closePath();
+							//cx.fill();
+							if(this.y>=-1*this.imgSrc.height){
+								this.y -= 12;
+							}
+							cx.save();
+							cx.drawImage(this.imgSrc,this.x,this.y);
+							cx.restore();
+						//}
+				}
+			}
+		
+		function Score(cx){
+				this.x = 20;
+				this.y = 25;
+				this.draw = function(){
+					cx.font = '700 16px microsoft yahei';
+					cx.fillStyle = '#333';
+					cx.fillText('分数：'+scoreShow,this.x,this.y);
+				}
+			}
+		
+		function crashCheck(arr){
+			var len = arr.length;
+			
+			for(var i=1;i<bulletCount;i++){
+				for(var j=bulletCount;j<len-1;j++){
+					
+				}
+			}
+		}
+		
+		function getPagePosition(ele){
+			var pos = {
+				x:ele.offsetLeft,
+				y:ele.offsetTop
+				};
+			while(ele.offsetParent){
+				ele = ele.offsetParent;
+				pos.x += ele.offsetLeft;
+				pos.y += ele.offsetTop;
+			}
+			return pos;
+		}
+		
+		function getRnd(num1,num2){
+			if(num2!=null){
+				return num1+Math.random()*(num2-num1);	
+			}else{
+				return Math.random()*num1;	
+			}
+		}
+		
+	</script>
+</body>
+</html>
